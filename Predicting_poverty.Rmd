@@ -1,0 +1,280 @@
+---
+title: "Predicting_poverty"
+author: "Farooq Qaiser"
+date: "February 14, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+# admin
+
+```{r}
+
+## set the seed to make rmd reproducible
+set.seed(123)
+
+```
+
+
+## libraries 
+
+```{r}
+
+# don't want this mask margin from ggplot2
+library(randomForest)
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+library(dummies)
+
+```
+
+
+## load data
+
+```{r}
+
+data_loc = "/home/fqaiser94/poverty_data"
+
+files = list.files(path = data_loc, pattern = '.*hhold.*train.*')	
+file_paths = paste0(data_loc, '/', files)
+
+for(file in file_paths) {
+  
+  print(file)
+  
+  raw_data = read.csv(
+    file = file, 
+    header = TRUE, 
+    stringsAsFactors = FALSE
+    )
+  
+}
+
+raw_data
+
+```
+
+# EDA
+
+## column names
+
+```{r}
+
+colnames(raw_data)
+
+```
+
+The majority of the columns' names have been masked. 
+id, country, poor are the only ones I see which haven't been masked. 
+
+## missing data
+
+```{r}
+
+ggplot_missing <- function(x){
+  
+  x %>% 
+    is.na %>%
+    reshape2::melt() %>%
+    ggplot(
+      aes(x = Var2, y = Var1)) +
+    geom_raster(
+      aes(fill = value)) +
+    scale_fill_grey(
+      name = "",
+      labels = c("Present","Missing")) +
+    theme_minimal() + 
+    theme(
+      axis.ticks = element_line(), 
+      axis.text.x  = element_blank()) + 
+    labs(
+      x = "Variables",
+      y = "Rows")
+}
+
+ggplot_missing(raw_data)
+
+```
+
+Absolutely no missing data. 
+
+## class balance
+
+```{r}
+
+raw_data %>%
+  ggplot(mapping = aes(x = poor)) +
+  geom_bar() + 
+  theme_minimal()
+
+```
+
+fairly balanced dataset
+
+# Modelling
+
+## preprocess data
+
+```{r}
+
+unique(raw_data$poor)
+
+```
+
+Our target variable appears to be encoded as strings. Let's double check that. 
+
+```{r}
+
+sapply(select(raw_data, poor), class)
+
+```
+
+yup, character.  
+
+```{r}
+
+raw_data$poor = ifelse(raw_data$poor=="True", TRUE, FALSE)
+sapply(select(raw_data, poor), class)
+
+
+```
+
+changed to boolean
+
+```{r}
+
+which(raw_data=="True", arr.ind = TRUE)
+which(raw_data=="False", arr.ind = TRUE)
+
+```
+
+double checked and verified that there are no other columns where True/False is encoded as strings
+
+```{r}
+
+unique(sapply(raw_data, class))
+
+```
+
+got four types of features in our data
+
+```{r}
+
+filter_by_column_type = function(df, type) {
+  
+  ind <- sapply(df, type)
+  
+  return(df[ind])
+  
+}
+
+filter_by_column_type(head(raw_data), is.numeric) # integer or double (numeric)
+filter_by_column_type(head(raw_data), is.character)
+
+
+```
+
+only 4 numeric (integer or double) columns (excluding id column)
+
+```{r}
+
+model_data = raw_data
+
+```
+
+create new df for preprocessed data
+
+```{r}
+
+# standardize numeric features
+standardize <- function(df, omit_columns) {
+ 
+  # identify columns for standardization
+  ind = sapply(df, is.numeric)
+  
+  # omit specific columns for standardization
+  ind[which(colnames(df) %in% omit_columns)] <- FALSE
+
+  # standardize columns
+  df[ind] = lapply(df[ind], scale)
+  
+  return(df)
+}
+
+model_data <- standardize(
+  df = model_data, 
+  omit_columns = 'id')
+
+
+```
+
+standardize numeric columns (excluding the id column)
+
+```{r}
+
+# OHE categorical features
+model_data <- dummy.data.frame(
+  data = model_data, 
+  dummy.classes = c('character'),
+  sep="_")
+
+```
+
+one hot encode character columns
+
+## random forests model
+
+
+```{r}
+
+## 75% of the sample size
+sample_size <- floor(0.75 * nrow(model_data))
+
+train_ind <- sample(seq_len(nrow(model_data)), size = sample_size)
+
+train <- model_data[train_ind, ]
+test <- model_data[-train_ind, ]
+
+```
+
+split into train and test samples
+
+```{r}
+
+rf = randomForest(
+  factor(poor) ~ . , 
+  data = train 
+  )
+
+rf
+
+```
+
+```{r}
+
+plot(rf)
+
+```
+
+```{r}
+
+varImpPlot(rf)
+
+```
+
+## deep learning model
+
+```{r}
+
+
+
+```
+
