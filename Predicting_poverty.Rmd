@@ -240,6 +240,10 @@ model_data <- model_data %>%
 
 remove id column
 
+## logistic regression
+
+insert code here
+
 ## random forests model
 
 
@@ -282,6 +286,11 @@ split into train and test samples
 
 ## deep learning model
 
+recommended resources for deep learning in keras:  
+- https://www.amazon.com/Deep-Learning-R-Francois-Chollet/dp/161729554X  
+- https://github.com/rstudio/cheatsheets/raw/master/keras.pdf 
+
+
 ```{r}
 
 x_train <- data.matrix(select(train, -poor))
@@ -308,16 +317,27 @@ model %>%
   layer_dropout(rate = 0.1) %>%
   layer_dense(units = 50, activation = 'relu') %>%
   layer_dropout(rate = 0.05) %>%
-  layer_dense(units = 2, activation = 'relu')
+  # softmax guarantees the output to be between 0 and 1 
+  layer_dense(units = 2, activation = 'softmax') 
+
+```
+
+arbitrary deep learning architecture  
+
+consider using a multiscale architecture
+
+```{r}
 
 model %>% compile(
-  loss = 'categorical_crossentropy',
+  # loss = 'categorical_crossentropy',
+  loss = 'binary_crossentropy', # this is the metric used for the competition
   optimizer = optimizer_rmsprop(),
   metrics = c('accuracy')
 )
 
 ```
 
+Other loss functions available here: https://keras.io/losses/
 
 ```{r}
 
@@ -390,4 +410,82 @@ legend(
   lty=c(1,1))
 
 ```
+
+### predictions
+
+```{r}
+
+predictions <- model %>%
+  predict_proba(x=x_test) %>%
+  data.frame()
+
+head(predictions)
+
+```
+
+
+### interpreting the model
+
+
+
+## ensemble
+
+combine multiple predictors  
+
+### correlation check 
+
+check models are relatively uncorrelated  
+
+### average
+
+```{r}
+
+#Predicting the probabilities
+testSet$pred_rf_prob <- predict(
+  object = model_rf, 
+  testSet[,predictors], 
+  type='prob')
+
+testSet$pred_knn_prob <- predict(
+  object = model_knn, 
+  testSet[,predictors],
+  type='prob')
+
+testSet$pred_lr_prob <- predict(
+  object = model_lr, 
+  testSet[,predictors],
+  type='prob')
+
+#Taking average of predictions
+testSet$pred_avg <-(
+  testSet$pred_rf_prob$Y + testSet$pred_knn_prob$Y + testSet$pred_lr_prob$Y)/3
+
+#Splitting into binary classes at 0.5
+testSet$pred_avg<-as.factor(
+  ifelse(
+    testSet$pred_avg>0.5,
+    'Y',
+    'N'))
+
+```
+
+### weighted average
+
+```{r}
+
+# Taking weighted average of predictions
+testSet$pred_weighted_avg <- (testSet$pred_rf_prob$Y*0.25) + 
+  (testSet$pred_knn_prob$Y*0.25) +
+  (testSet$pred_lr_prob$Y*0.5)
+
+#Splitting into binary classes at 0.5
+testSet$pred_weighted_avg <- as.factor(
+  ifelse(
+    testSet$pred_weighted_avg>0.5, 
+    'Y',
+    'N'))
+
+```
+
+### stacking  
 
