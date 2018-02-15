@@ -33,6 +33,7 @@ library(tidyr)
 library(ggplot2)
 
 library(dummies)
+library(keras)
 
 ```
 
@@ -230,6 +231,15 @@ model_data <- dummy.data.frame(
 
 one hot encode character columns
 
+```{r}
+
+model_data <- model_data %>%
+  select(-id)
+
+```
+
+remove id column
+
 ## random forests model
 
 
@@ -249,24 +259,24 @@ split into train and test samples
 
 ```{r}
 
-rf = randomForest(
-  factor(poor) ~ . , 
-  data = train 
-  )
-
-rf
-
-```
-
-```{r}
-
-plot(rf)
+# rf = randomForest(
+#   factor(poor) ~ . , 
+#   data = train 
+#   )
+# 
+# rf
 
 ```
 
 ```{r}
 
-varImpPlot(rf)
+# plot(rf)
+
+```
+
+```{r}
+
+# varImpPlot(rf)
 
 ```
 
@@ -274,7 +284,110 @@ varImpPlot(rf)
 
 ```{r}
 
+x_train <- data.matrix(select(train, -poor))
+x_test <- data.matrix(select(test, -poor))
 
+# y_train <- data.matrix(train$poor)
+y_train = to_categorical(train$poor)
+y_test = to_categorical(test$poor)
+
+```
+
+```{r}
+
+model <- keras_model_sequential() 
+
+model %>% 
+  layer_dense(units = 3000, activation = 'relu', input_shape = c(ncol(x_train))) %>% 
+  layer_dropout(rate = 0.4) %>%
+  layer_dense(units = 1000, activation = 'relu') %>%
+  layer_dropout(rate = 0.3) %>%
+  layer_dense(units = 512, activation = 'relu') %>%
+  layer_dropout(rate = 0.2) %>%
+  layer_dense(units = 256, activation = 'relu') %>%
+  layer_dropout(rate = 0.1) %>%
+  layer_dense(units = 50, activation = 'relu') %>%
+  layer_dropout(rate = 0.05) %>%
+  layer_dense(units = 2, activation = 'relu')
+
+model %>% compile(
+  loss = 'categorical_crossentropy',
+  optimizer = optimizer_rmsprop(),
+  metrics = c('accuracy')
+)
+
+```
+
+
+```{r}
+
+history <- model %>% 
+  fit(
+    x = x_train, 
+    y = y_train, 
+    epochs = 30, 
+    batch_size = 128, 
+    validation_split = 0.2
+)
+
+plot(history)
+
+```
+
+```{r}
+
+model %>% 
+  evaluate(x_test, y_test)
+
+```
+
+
+```{r}
+
+# Plot the model loss of the training data
+plot(
+  history$metrics$loss, 
+  main="Model Loss", 
+  xlab = "epoch", 
+  ylab="loss", 
+  col="blue", 
+  type="l")
+
+# Plot the model loss of the test data
+lines(
+  history$metrics$val_loss, 
+  col="green")
+
+# Add legend
+legend(
+  "topright", 
+  c("train","test"), 
+  col=c("blue", "green"), 
+  lty=c(1,1))
+
+```
+
+
+```{r}
+
+# Plot the model accuracy
+plot(
+  history$metrics$acc, 
+  main="Model Accuracy", 
+  xlab = "epoch", 
+  ylab="accuracy", 
+  col="blue", 
+  type="l")
+
+lines(
+  history$metrics$val_acc, 
+  col="green")
+
+legend(
+  "bottomright", 
+  c("train","test"), 
+  col=c("blue", "green"), 
+  lty=c(1,1))
 
 ```
 
