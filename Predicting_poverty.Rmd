@@ -96,6 +96,12 @@ raw_train_hhold_data <- load_data(
   data_loc = data_loc, 
   file_pattern = '.*hhold.*train.*')
 
+lapply(
+  X = raw_train_hhold_data, 
+  FUN = head
+  )
+
+
 ```
 
 get training household level files
@@ -105,6 +111,11 @@ get training household level files
 raw_test_hhold_data <- load_data(
   data_loc = data_loc, 
   file_pattern = '.*hhold.*test.*')
+
+lapply(
+  X = raw_test_hhold_data, 
+  FUN = head
+  )
 
 ```
 
@@ -118,6 +129,11 @@ raw_train_indiv_data <- load_data(
   data_loc = data_loc, 
   file_pattern = '.*indiv.*train.*')
 
+lapply(
+  X = raw_train_indiv_data, 
+  FUN = head
+  )
+
 ```
 
 get training individual level files
@@ -127,6 +143,12 @@ get training individual level files
 raw_test_indiv_data <- load_data(
   data_loc = data_loc, 
   file_pattern = '.*indiv.*test.*')
+
+lapply(
+  X = raw_test_indiv_data, 
+  FUN = head
+  )
+
 
 ```
 
@@ -138,12 +160,16 @@ get test individual level files
 
 ```{r}
 
-colnames(raw_data)
+lapply(
+  X = raw_train_hhold_data, 
+  FUN = colnames
+  )
 
 ```
 
-The majority of the columns' names have been masked. 
-id, country, poor are the only ones I see which haven't been masked. 
+The majority of the columns' names have been masked.  
+id, country, poor are the only ones I see which haven't been masked.  
+Worse yet, columns are not aligned across the 3 household datasets. 
 
 ## missing data
 
@@ -170,24 +196,36 @@ ggplot_missing <- function(x){
       y = "Rows")
 }
 
-ggplot_missing(raw_data)
+# lapply(
+#   X = raw_train_hhold_data,
+#   FUN = ggplot_missing
+#   )
 
 ```
 
-Absolutely no missing data. 
+only the first dataset has some missing data. 
 
 ## class balance
 
 ```{r}
 
-raw_data %>%
-  ggplot(mapping = aes(x = poor)) +
-  geom_bar() + 
-  theme_minimal()
+temp_function <- function(df) {
+  
+  df %>%
+    ggplot(mapping = aes(x = poor)) +
+    geom_bar() + 
+    theme_minimal()
+  
+}
+
+lapply(
+  X = raw_train_hhold_data, 
+  FUN = temp_function
+  )
 
 ```
 
-fairly balanced dataset
+only one is a balanced dataset
 
 # Modelling
 
@@ -195,7 +233,40 @@ fairly balanced dataset
 
 ```{r}
 
-unique(raw_data$poor)
+model_train_hhold_data = raw_train_hhold_data
+
+```
+
+create new df for preprocessed data
+
+```{r}
+
+for (i in seq_along(model_train_hhold_data)) {
+  
+  # for dropping rows with NA
+  # model_train_hhold_data[[i]] <-  
+  #   model_train_hhold_data[[i]][complete.cases(, model_train_hhold_data[[i]])]
+  
+  # for dropping columns with NA
+  model_train_hhold_data[[i]][colSums(is.na(model_train_hhold_data[[i]])) > 0]
+}
+
+```
+
+remove any columns with NULL values
+
+```{r}
+
+temp_function <- function(df) {
+  
+  unique(df$poor)
+  
+}
+
+lapply(
+  X = model_train_hhold_data, 
+  FUN = temp_function
+  )
 
 ```
 
@@ -203,7 +274,16 @@ Our target variable appears to be encoded as strings. Let's double check that.
 
 ```{r}
 
-sapply(select(raw_data, poor), class)
+temp_function <- function(df) {
+  
+  sapply(select(df, poor), class)
+  
+}
+
+lapply(
+  X = model_train_hhold_data, 
+  FUN = temp_function
+  )
 
 ```
 
@@ -211,8 +291,13 @@ yup, character.
 
 ```{r}
 
-raw_data$poor = ifelse(raw_data$poor=="True", TRUE, FALSE)
-sapply(select(raw_data, poor), class)
+for (i in seq_along(model_train_hhold_data)) {
+  model_train_hhold_data[[i]]$poor <- ifelse(
+    model_train_hhold_data[[i]]$poor=="True", TRUE, FALSE)
+  
+  print(class(model_train_hhold_data[[i]]$poor))
+
+}
 
 
 ```
@@ -221,8 +306,12 @@ changed to boolean
 
 ```{r}
 
-which(raw_data=="True", arr.ind = TRUE)
-which(raw_data=="False", arr.ind = TRUE)
+# for (i in seq_along(model_train_hhold_data)) {
+#   
+#   print(which(model_train_hhold_data[[i]]=="True", arr.ind = TRUE))
+#   print(which(model_train_hhold_data[[i]]=="False", arr.ind = TRUE))
+# 
+# }
 
 ```
 
@@ -230,11 +319,20 @@ double checked and verified that there are no other columns where True/False is 
 
 ```{r}
 
-unique(sapply(raw_data, class))
+temp_function <- function(df) {
+  
+  unique(sapply(df, class))
+  
+}
+
+lapply(
+  X = model_train_hhold_data, 
+  FUN = temp_function
+  )
 
 ```
 
-got four types of features in our data
+got four types of features in each dataset
 
 ```{r}
 
@@ -246,9 +344,11 @@ filter_by_column_type = function(df, type) {
   
 }
 
-filter_by_column_type(head(raw_data), is.numeric) # integer or double (numeric)
-filter_by_column_type(head(raw_data), is.character)
-
+lapply(
+  X = model_train_hhold_data, 
+  FUN = filter_by_column_type, 
+  type = is.numeric # integer or double (numeric)
+  )
 
 ```
 
@@ -256,11 +356,16 @@ only 4 numeric (integer or double) columns (excluding id column)
 
 ```{r}
 
-model_data = raw_data
+lapply(
+  X = model_train_hhold_data, 
+  FUN = filter_by_column_type, 
+  type = is.character
+  )
 
 ```
 
-create new df for preprocessed data
+tons of character columns
+
 
 ```{r}
 
@@ -279,10 +384,11 @@ standardize <- function(df, omit_columns) {
   return(df)
 }
 
-model_data <- standardize(
-  df = model_data, 
-  omit_columns = 'id')
-
+model_train_hhold_data <- lapply(
+  X = model_train_hhold_data, 
+  FUN = standardize, 
+  omit_columns = 'id'
+  )
 
 ```
 
@@ -291,10 +397,12 @@ standardize numeric columns (excluding the id column)
 ```{r}
 
 # OHE categorical features
-model_data <- dummy.data.frame(
-  data = model_data, 
+model_train_hhold_data <- lapply(
+  X = model_train_hhold_data, 
+  FUN = dummy.data.frame, 
   dummy.classes = c('character'),
-  sep="_")
+  sep = "_"
+  )
 
 ```
 
@@ -302,13 +410,54 @@ one hot encode character columns
 
 ```{r}
 
-rownames(model_data) <- model_data$id
-
-# model_data <- subset(model_data, select = -c(id))
+head(model_train_hhold_data[[1]])
 
 ```
 
-remove id column
+looks right
+
+```{r}
+
+temp <- function(df, prcnt, return_train, return_test) {
+  
+  # this function will only work properly if seed has been set correctly
+  set.seed(123)
+  
+  # sample indices
+  sample_size <- floor(prcnt * nrow(df))
+  train_ind <- sample(seq_len(nrow(df)), size = sample_size)
+
+  if(return_train==TRUE) {
+    train <- subset(x = df[train_ind, ], select = -c(id))
+    return(train)
+  }
+  
+  if(return_test==TRUE) {
+    test <- subset(x = df[-train_ind, ], select = -c(id))
+    return(test)
+  }
+  
+}
+
+train <- lapply(
+  X = model_train_hhold_data, 
+  FUN = temp, 
+  prcnt=0.75, 
+  return_train=TRUE, 
+  return_test=FALSE
+  )
+
+test <- lapply(
+  X = model_train_hhold_data, 
+  FUN = temp, 
+  prcnt=0.75, 
+  return_train=FALSE, 
+  return_test=TRUE
+  )
+
+```
+
+split into train and test samples
 
 ## logistic regression
 
@@ -316,19 +465,6 @@ insert code here
 
 ## random forests model
 
-```{r}
-
-## 75% of the sample size
-sample_size <- floor(0.75 * nrow(model_data))
-
-train_ind <- sample(seq_len(nrow(model_data)), size = sample_size)
-
-train <- model_data[train_ind, -model_data$id]
-test <- model_data[-train_ind, -model_data$id]
-
-```
-
-split into train and test samples
 
 ```{r}
 
@@ -366,123 +502,192 @@ recommended resources for deep learning in keras:
 - https://github.com/rstudio/cheatsheets/raw/master/keras.pdf  
 - https://www.datacamp.com/community/tutorials/keras-r-deep-learning  
 - https://www.linkedin.com/pulse/finally-deep-learning-keras-tensorflow-r-richard-wanjohi-ph-d/  
+- https://cran.rstudio.com/web/packages/keras/vignettes/about_keras_models.html 
+
 
 ```{r}
 
-x_train <- data.matrix(select(train, -poor))
-x_test <- data.matrix(select(test, -poor))
+# remove target variable and convert to data matrix
+temp_function <- function(df) {
+  
+  feature_data <- data.matrix(select(df, -poor))
 
-y_train = to_categorical(train$poor)
-y_test = to_categorical(test$poor)
+}
+
+x_train <- lapply(
+  X = train, 
+  FUN = temp_function 
+  )
+
+x_test <- lapply(
+  X = test, 
+  FUN = temp_function
+  )
 
 ```
 
+
 ```{r}
 
-model <- keras_model_sequential() 
+# extract target variable and convert to data matrix
+temp_function <- function(df) {
+  
+  y = to_categorical(df$poor)
 
-model %>% 
-  layer_dense(units = 3000, activation = 'relu', input_shape = c(ncol(x_train))) %>% 
-  layer_dropout(rate = 0.4) %>%
-  layer_dense(units = 1000, activation = 'relu') %>%
-  layer_dropout(rate = 0.3) %>%
-  layer_dense(units = 512, activation = 'relu') %>%
-  layer_dropout(rate = 0.2) %>%
-  layer_dense(units = 256, activation = 'relu') %>%
-  layer_dropout(rate = 0.1) %>%
-  layer_dense(units = 50, activation = 'relu') %>%
-  layer_dropout(rate = 0.05) %>%
-  # softmax guarantees the output to be between 0 and 1 
-  layer_dense(units = 2, activation = 'softmax') 
+  }
+
+y_train <- lapply(
+  X = train, 
+  FUN = temp_function 
+  )
+
+y_test <- lapply(
+  X = test,
+  FUN = temp_function 
+  )
+
+```
+
+
+```{r}
+
+# init empty list of models
+models = list()
+
+for (i in seq_along(model_train_hhold_data)) {
+
+  models[[i]] <- keras_model_sequential() %>% 
+    layer_dense(units = 3000, activation = 'relu', 
+      input_shape = c(ncol(x_train[[i]]))) %>% 
+    layer_dropout(rate = 0.4) %>%
+    layer_dense(units = 1000, activation = 'relu') %>%
+    layer_dropout(rate = 0.3) %>%
+    layer_dense(units = 512, activation = 'relu') %>%
+    layer_dropout(rate = 0.2) %>%
+    layer_dense(units = 256, activation = 'relu') %>%
+    layer_dropout(rate = 0.1) %>%
+    layer_dense(units = 50, activation = 'relu') %>%
+    layer_dropout(rate = 0.05) %>%
+    # softmax guarantees output between 0 and 1; pseudo probability 
+    layer_dense(units = 2, activation = 'softmax') %>% 
+    # 
+    compile(
+      # this is the metric used for the competition
+      loss = 'binary_crossentropy', 
+      # 
+      optimizer = optimizer_rmsprop(),
+      # 
+      metrics = c('accuracy')
+    )
+}
+
 
 ```
 
 arbitrary deep learning architecture  
 
-consider using a multiscale architecture
+consider using a multiscale architecture  
+
+Other loss functions available here: https://keras.io/losses/  
 
 ```{r}
 
-model %>% compile(
-  # loss = 'categorical_crossentropy',
-  loss = 'binary_crossentropy', # this is the metric used for the competition
-  optimizer = optimizer_rmsprop(),
-  metrics = c('accuracy')
-)
+history = list() 
 
-```
+for (i in seq_along(models)) {
 
-Other loss functions available here: https://keras.io/losses/
-
-```{r}
-
-history <- model %>% 
-  fit(
-    x = x_train, 
-    y = y_train, 
-    epochs = 5,  #30, 
-    batch_size = 128, 
-    validation_split = 0.2
-)
-
-plot(history)
-
-```
-
-```{r}
-
-model %>% 
-  evaluate(x_test, y_test)
+  history[[i]] <- models[[i]] %>% 
+    fit(
+      x = x_train[[i]], 
+      y = y_train[[i]], 
+      epochs = 5,  #30, 
+      batch_size = 128, 
+      validation_split = 0.2)
+}
 
 ```
 
 
 ```{r}
 
-# Plot the model loss of the training data
-plot(
-  history$metrics$loss, 
-  main="Model Loss", 
-  xlab = "epoch", 
-  ylab="loss", 
-  col="blue", 
-  type="l")
-
-# Plot the model loss of the test data
-lines(
-  history$metrics$val_loss, 
-  col="green")
-
-# Add legend
-legend(
-  "topright", 
-  c("train","test"), 
-  col=c("blue", "green"), 
-  lty=c(1,1))
+for (i in seq_along(models)) {
+  
+  print(plot(history[[i]]))
+  
+}
 
 ```
 
 
 ```{r}
 
-# Plot the model accuracy
-plot(
-  history$metrics$acc, 
-  main="Model Accuracy", 
-  xlab = "epoch", 
-  ylab="accuracy", 
-  col="blue", 
-  type="l")
+for (i in seq_along(models)) {
+  
+  temp <- models[[i]] %>% 
+    evaluate(x_test[[i]], y_test[[i]])
+  
+  print(temp)
+}
 
-lines(
-  history$metrics$val_acc, 
-  col="green")
 
-legend(
-  "bottomright", 
-  c("train","test"), 
-  col=c("blue", "green"), 
-  lty=c(1,1))
+```
+
+
+```{r}
+
+for (i in seq_along(models)) {
+  
+  # Plot the model loss of the training data
+  plot(
+    history[[i]]$metrics$loss, 
+    main="Model Loss", 
+    xlab = "epoch", 
+    ylab="loss", 
+    col="blue", 
+    type="l")
+  
+  # Plot the model loss of the test data
+  lines(
+    history[[i]]$metrics$val_loss, 
+    col="green")
+  
+  # Add legend
+  legend(
+    "topright", 
+    c("train","test"), 
+    col=c("blue", "green"), 
+    lty=c(1,1))
+}
+
+
+
+```
+
+
+```{r}
+
+for (i in seq_along(models)) {
+  
+  # Plot the model accuracy
+  plot(
+    history[[i]]$metrics$acc, 
+    main="Model Accuracy", 
+    xlab = "epoch", 
+    ylab="accuracy", 
+    col="blue", 
+    type="l")
+  
+  lines(
+    history[[i]]$metrics$val_acc, 
+    col="green")
+  
+  legend(
+    "bottomright", 
+    c("train","test"), 
+    col=c("blue", "green"), 
+    lty=c(1,1))
+  
+}
 
 ```
 
@@ -490,18 +695,24 @@ legend(
 
 ```{r}
 
-predictions <- model %>%
-  # make predictions
-  predict_proba(x=x_test) %>%
-  # convert to df
-  data.frame() %>%
-  rename(not_poor=X1, poor=X2) %>%
-  # add back country
-  mutate(country='A') %>%
-  # add back id
-  bind_cols(model_data[-train_ind, -model_data$id]) %>%
-  # we only want the probability that p = 1 (not p = 0)
-  select(id, country, poor)
+test_predictions = list()
+
+for (i in seq_along(models)) {
+
+  predictions[[i]] <- models[[i]] %>%
+    # make predictions
+    predict_proba(x=x_test) %>%
+    # convert to df
+    data.frame() %>%
+    rename(not_poor=X1, poor=X2) %>%
+    # add back country
+    mutate(country='A') %>%
+    # add back id
+    bind_cols(
+      raw_train_hhold_data[[i]][-train_ind, -raw_train_hhold_data[[i]]$id]) %>%
+    # we only want the probability that p = 1 (not p = 0)
+    select(id, country, poor)
+  }
 
 head(predictions)
 
