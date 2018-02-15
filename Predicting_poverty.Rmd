@@ -46,24 +46,91 @@ library(keras)
 
 data_loc = "/home/fqaiser94/poverty_data"
 
-files = list.files(path = data_loc, pattern = '.*hhold.*train.*')	
-file_paths = paste0(data_loc, '/', files)
+```
 
-for(file in file_paths) {
+set data location
+
+### household data
+
+```{r}
+
+
+load_data <- function(data_loc, file_pattern) {
   
-  print(file)
+  # find files matching pattern
+  files = list.files(path = data_loc, pattern = file_pattern)	
+  file_paths = paste0(data_loc, '/', files)
   
-  raw_data = read.csv(
-    file = file, 
-    header = TRUE, 
-    stringsAsFactors = FALSE
-    )
+  # init empty list
+  data_list <- list()
   
+  # for each file matching file pattern
+  for(i in 1:length(file_paths)) {
+    
+    file = file_paths[i]
+    
+    print(file)
+    
+    # read in file as df
+    raw_data = read.csv(
+      file = file,
+      header = TRUE,
+      stringsAsFactors = FALSE
+      )
+    
+    # save df to list
+    data_list[[i]] <- raw_data
+  }
+  
+  # return list of data
+  return(data_list)
 }
 
-raw_data
+```
+
+define generic load data function
+
+```{r}
+
+raw_train_hhold_data <- load_data(
+  data_loc = data_loc, 
+  file_pattern = '.*hhold.*train.*')
 
 ```
+
+get training household level files
+
+```{r}
+
+raw_test_hhold_data <- load_data(
+  data_loc = data_loc, 
+  file_pattern = '.*hhold.*test.*')
+
+```
+
+get test household level files
+
+### individual data
+
+```{r}
+
+raw_train_indiv_data <- load_data(
+  data_loc = data_loc, 
+  file_pattern = '.*indiv.*train.*')
+
+```
+
+get training individual level files
+
+```{r}
+
+raw_test_indiv_data <- load_data(
+  data_loc = data_loc, 
+  file_pattern = '.*indiv.*test.*')
+
+```
+
+get test individual level files
 
 # EDA
 
