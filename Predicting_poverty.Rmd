@@ -11,7 +11,9 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```
 
-# admin
+# Admin
+
+## set seed
 
 ```{r}
 
@@ -21,7 +23,7 @@ set.seed(123)
 ```
 
 
-## libraries 
+## load libraries 
 
 ```{r}
 
@@ -233,8 +235,9 @@ one hot encode character columns
 
 ```{r}
 
-model_data <- model_data %>%
-  select(-id)
+rownames(model_data) <- model_data$id
+
+# model_data <- subset(model_data, select = -c(id))
 
 ```
 
@@ -246,7 +249,6 @@ insert code here
 
 ## random forests model
 
-
 ```{r}
 
 ## 75% of the sample size
@@ -254,8 +256,8 @@ sample_size <- floor(0.75 * nrow(model_data))
 
 train_ind <- sample(seq_len(nrow(model_data)), size = sample_size)
 
-train <- model_data[train_ind, ]
-test <- model_data[-train_ind, ]
+train <- model_data[train_ind, -model_data$id]
+test <- model_data[-train_ind, -model_data$id]
 
 ```
 
@@ -284,19 +286,25 @@ split into train and test samples
 
 ```
 
-## deep learning model
+## lightGBM
+
+useful resources:  
+- https://www.kaggle.com/andrewmvd/lightgbm-in-r  
+- https://github.com/Microsoft/LightGBM/tree/master/R-package  
+
+## deep learning
 
 recommended resources for deep learning in keras:  
 - https://www.amazon.com/Deep-Learning-R-Francois-Chollet/dp/161729554X  
-- https://github.com/rstudio/cheatsheets/raw/master/keras.pdf 
-
+- https://github.com/rstudio/cheatsheets/raw/master/keras.pdf  
+- https://www.datacamp.com/community/tutorials/keras-r-deep-learning  
+- https://www.linkedin.com/pulse/finally-deep-learning-keras-tensorflow-r-richard-wanjohi-ph-d/  
 
 ```{r}
 
 x_train <- data.matrix(select(train, -poor))
 x_test <- data.matrix(select(test, -poor))
 
-# y_train <- data.matrix(train$poor)
 y_train = to_categorical(train$poor)
 y_test = to_categorical(test$poor)
 
@@ -345,7 +353,7 @@ history <- model %>%
   fit(
     x = x_train, 
     y = y_train, 
-    epochs = 30, 
+    epochs = 5,  #30, 
     batch_size = 128, 
     validation_split = 0.2
 )
@@ -416,21 +424,37 @@ legend(
 ```{r}
 
 predictions <- model %>%
+  # make predictions
   predict_proba(x=x_test) %>%
-  data.frame()
+  # convert to df
+  data.frame() %>%
+  rename(not_poor=X1, poor=X2) %>%
+  # add back country
+  mutate(country='A') %>%
+  # add back id
+  bind_cols(model_data[-train_ind, -model_data$id]) %>%
+  # we only want the probability that p = 1 (not p = 0)
+  select(id, country, poor)
 
 head(predictions)
 
 ```
 
-
 ### interpreting the model
 
+useful resources:  
+- http://www.f1-predictor.com/model-interpretability-with-shap/?utm_source=linkedin&utm_medium=post&utm_campaign=shap 
+- 
 
+insert SHAP/LIME code
 
 ## ensemble
 
 combine multiple predictors  
+
+useful resources:  
+- https://www.analyticsvidhya.com/blog/2017/02/introduction-to-ensembling-along-with-implementation-in-r/  
+
 
 ### correlation check 
 
@@ -456,11 +480,11 @@ testSet$pred_lr_prob <- predict(
   testSet[,predictors],
   type='prob')
 
-#Taking average of predictions
+# taking average of predictions
 testSet$pred_avg <-(
   testSet$pred_rf_prob$Y + testSet$pred_knn_prob$Y + testSet$pred_lr_prob$Y)/3
 
-#Splitting into binary classes at 0.5
+# splitting into binary classes at 0.5
 testSet$pred_avg<-as.factor(
   ifelse(
     testSet$pred_avg>0.5,
