@@ -196,14 +196,30 @@ ggplot_missing <- function(x){
       y = "Rows")
 }
 
-# lapply(
-#   X = raw_train_hhold_data,
-#   FUN = ggplot_missing
-#   )
+lapply(
+  X = raw_train_hhold_data,
+  FUN = ggplot_missing
+  )
 
 ```
 
-only the first dataset has some missing data. 
+```{r}
+
+# count number of NA
+temp_function <- function(df){
+  
+  sum(is.na(df)) 
+  
+  }
+
+lapply(
+  X = raw_train_hhold_data,
+  FUN = temp_function
+  )
+
+```
+
+only the second dataset has any missing data. 
 
 ## class balance
 
@@ -248,8 +264,34 @@ for (i in seq_along(model_train_hhold_data)) {
   #   model_train_hhold_data[[i]][complete.cases(, model_train_hhold_data[[i]])]
   
   # for dropping columns with NA
-  model_train_hhold_data[[i]][colSums(is.na(model_train_hhold_data[[i]])) > 0]
+  # inds <- (colSums(is.na(model_train_hhold_data[[i]]))) > 0 
+  # 
+  # print(sum(inds))
+  # print(inds)
+  # 
+  # model_train_hhold_data[[i]] <- model_train_hhold_data[[i]][, -inds]
+  
+  model_train_hhold_data[[i]] <- 
+    model_train_hhold_data[[i]][ , colSums(
+      is.na(model_train_hhold_data[[i]]))==0]
+
 }
+
+```
+
+```{r}
+
+# count number of NA
+temp_function <- function(df){
+  
+  sum(is.na(df)) 
+  
+  }
+
+lapply(
+  X = model_train_hhold_data,
+  FUN = temp_function
+  )
 
 ```
 
