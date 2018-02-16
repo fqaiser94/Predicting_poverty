@@ -365,7 +365,7 @@ yup, character it is.
 
 for (i in seq_along(model_train_hhold_data)) {
   model_train_hhold_data[[i]]$poor <- ifelse(
-    model_train_hhold_data[[i]]$poor=="True", TRUE, FALSE)
+    model_train_hhold_data[[i]]$poor=="True", 2, 1)
   
   print(class(model_train_hhold_data[[i]]$poor))
 
@@ -374,7 +374,7 @@ for (i in seq_along(model_train_hhold_data)) {
 
 ```
 
-changed to boolean
+changed to numeric
 
 ```{r}
 
@@ -427,27 +427,6 @@ tons of character columns, relatively speaking.
 
 ## standardize numeric
 
-```{r}
-
-temp = c('a', 2, 5, 'c')
-
-temp1 = c()
-
-for(element in temp) {
-  temp1 <- c(temp1, is.numeric(element))
-}
-
-temp1
-
-```
-
-
-```{r}
-
-which(colnames(model_train_hhold_data[[1]]) %in% c('id', 'Train'))
-
-```
-
 
 ```{r}
 
@@ -470,7 +449,7 @@ standardize <- function(df, omit_columns) {
 model_train_hhold_data <- lapply(
   X = model_train_hhold_data, 
   FUN = standardize, 
-  omit_columns = c('id', 'Train')
+  omit_columns = c('id', 'Train', 'poor')
   )
 
 ```
@@ -535,7 +514,6 @@ for (i in seq_along(model_train_hhold_data)) {
 
 ```
 
-
 extract testing data
 
 ```{r}
@@ -565,6 +543,106 @@ for (i in seq_along(model_train_hhold_data)) {
 ```
 
 split into train and valid samples
+
+## treat class imbalance in training data
+
+```{r}
+
+get_class_weights <- function(target_var) {
+  
+  # y: target variable
+  
+  # calculate total number of responses
+  total = length(target_var)
+  
+  # init empty dictionary
+  dict = data.frame(class=NULL, count=NULL, stringsAsFactors = FALSE)
+  
+  for(class in unique(target_var)) {
+    
+    dict <- dict %>%
+      bind_rows(
+        data.frame(
+          class = class, 
+          count = sum(target_var==class), 
+          stringsAsFactors = FALSE
+        )
+      )
+  }
+  
+  # figure out major class
+  majority_count = max(dict$count)
+  majority_class = dict[dict$count==majority_count, ]$class
+
+  # create weights 
+  dict$weight = majority_count/dict$count
+
+  return(dict)
+  
+  } 
+
+class_weights = list()
+
+for (i in seq_along(model_train_hhold_data)) {
+
+  
+  class_weights[[i]] =  get_class_weights(
+    target_var = train[[i]]$poor)
+  
+  print(class_weights[[i]])
+  
+}
+
+```
+
+
+```{r}
+
+
+get_class_weights <- function(target_var) {
+  
+  # y: target variable
+  
+  # calculate total number of responses
+  total = length(target_var)
+  
+  # init empty dictionary
+  counts_dict = list()
+  
+  for(class in unique(target_var)) {
+    
+    counts_dict[[class]] <- sum(target_var==class)
+  }
+  
+  # figure out major class
+  majority_class = which.max(counts_dict)
+  majority_count = as.numeric(counts_dict[majority_class]) 
+
+  # init empty dictionary
+  weights_dict = list()
+  
+  for(class in unique(target_var)) {
+    
+    weights_dict[[class]] <- majority_count/as.numeric(counts_dict[class])
+  
+    }
+  
+  return(weights_dict)
+  
+  } 
+
+class_weights = list()
+
+for (i in seq_along(model_train_hhold_data)) {
+
+
+  class_weights[[i]] =  get_class_weights(
+    target_var = train[[i]]$poor)
+
+}
+
+```
+
 
 # Modelling
 
@@ -888,10 +966,12 @@ for (i in seq_along(models)) {
   history[[i]] <- models[[i]] %>% 
     fit(
       x = x_train[[i]], 
-      y = y_train[[i]], 
-      epochs = 30, #5,
+      y = y_train[[i]],
+      class_weight=class_weights[[i]],
+      epochs = 5, #5,
       batch_size = 128, 
-      validation_split = 0.2)
+      validation_split = 0.2, 
+      shuffle = TRUE) 
 }
 
 ```
@@ -1069,32 +1149,32 @@ check models are relatively uncorrelated
 
 ```{r}
 
-#Predicting the probabilities
-testSet$pred_rf_prob <- predict(
-  object = model_rf, 
-  testSet[,predictors], 
-  type='prob')
-
-testSet$pred_knn_prob <- predict(
-  object = model_knn, 
-  testSet[,predictors],
-  type='prob')
-
-testSet$pred_lr_prob <- predict(
-  object = model_lr, 
-  testSet[,predictors],
-  type='prob')
-
-# taking average of predictions
-testSet$pred_avg <-(
-  testSet$pred_rf_prob$Y + testSet$pred_knn_prob$Y + testSet$pred_lr_prob$Y)/3
-
-# splitting into binary classes at 0.5
-testSet$pred_avg<-as.factor(
-  ifelse(
-    testSet$pred_avg>0.5,
-    'Y',
-    'N'))
+# #Predicting the probabilities
+# testSet$pred_rf_prob <- predict(
+#   object = model_rf, 
+#   testSet[,predictors], 
+#   type='prob')
+# 
+# testSet$pred_knn_prob <- predict(
+#   object = model_knn, 
+#   testSet[,predictors],
+#   type='prob')
+# 
+# testSet$pred_lr_prob <- predict(
+#   object = model_lr, 
+#   testSet[,predictors],
+#   type='prob')
+# 
+# # taking average of predictions
+# testSet$pred_avg <-(
+#   testSet$pred_rf_prob$Y + testSet$pred_knn_prob$Y + testSet$pred_lr_prob$Y)/3
+# 
+# # splitting into binary classes at 0.5
+# testSet$pred_avg<-as.factor(
+#   ifelse(
+#     testSet$pred_avg>0.5,
+#     'Y',
+#     'N'))
 
 ```
 
@@ -1102,17 +1182,17 @@ testSet$pred_avg<-as.factor(
 
 ```{r}
 
-# Taking weighted average of predictions
-testSet$pred_weighted_avg <- (testSet$pred_rf_prob$Y*0.25) + 
-  (testSet$pred_knn_prob$Y*0.25) +
-  (testSet$pred_lr_prob$Y*0.5)
-
-#Splitting into binary classes at 0.5
-testSet$pred_weighted_avg <- as.factor(
-  ifelse(
-    testSet$pred_weighted_avg>0.5, 
-    'Y',
-    'N'))
+# # Taking weighted average of predictions
+# testSet$pred_weighted_avg <- (testSet$pred_rf_prob$Y*0.25) + 
+#   (testSet$pred_knn_prob$Y*0.25) +
+#   (testSet$pred_lr_prob$Y*0.5)
+# 
+# #Splitting into binary classes at 0.5
+# testSet$pred_weighted_avg <- as.factor(
+#   ifelse(
+#     testSet$pred_weighted_avg>0.5, 
+#     'Y',
+#     'N'))
 
 ```
 
