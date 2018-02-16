@@ -368,6 +368,7 @@ for (i in seq_along(model_train_hhold_data)) {
     model_train_hhold_data[[i]]$poor=="True", 2, 1)
   
   print(class(model_train_hhold_data[[i]]$poor))
+  print(unique(model_train_hhold_data[[i]]$poor))
 
 }
 
@@ -468,6 +469,35 @@ lapply(
 standardize numeric columns (excluding the id and train columns)
 
 ## OHE categorical
+
+```{r}
+
+# # ohe categorical features
+# ohe <- function(df, omit_columns) {
+#  
+#   # identify columns for standardization
+#   ind = sapply(df, is.character)
+#   
+#   # omit specific columns for standardization
+#   ind[which(colnames(df) %in% omit_columns)] <- FALSE
+# 
+#   # standardize columns
+#   df[, ind] = lapply(df[, ind], dummy.data.frame)
+#   df[, ind] = lapply(df[, ind], as.vector)
+# 
+# 
+#   return(df)
+# }
+# 
+# temp <- lapply(
+#   X = model_train_hhold_data, 
+#   FUN = ohe, 
+#   omit_columns = c('id', 'Train', 'poor')
+#   )
+
+```
+
+
 
 ```{r}
 
@@ -641,6 +671,8 @@ for (i in seq_along(model_train_hhold_data)) {
 
 }
 
+print(class_weights[[1]])
+
 ```
 
 
@@ -725,7 +757,10 @@ x_test <- lapply(
 temp_function <- function(df) {
   
   y = to_categorical(df$poor)
+  # some bug causing a redundant first column to be created
+  y = y[, 2:3, drop=FALSE]
 
+  return(y)
   }
 
 y_train <- lapply(
@@ -740,16 +775,6 @@ y_valid <- lapply(
 
 ```
 
-
-```{r}
-
-for (i in seq_along(train)) {
-  
-  print(ncol(x_train[[i]]))
-
-}
-
-```
 
 
 ```{r}
@@ -804,16 +829,7 @@ models[[1]] <- keras_model_sequential() %>%
   layer_dense(units = 50, activation = 'relu') %>%
   layer_dropout(rate = 0.05) %>%
   # softmax guarantees output between 0 and 1; pseudo probability 
-  layer_dense(units = 2, activation = 'softmax') %>% 
-  # 
-  compile(
-    # this is the metric used for the competition
-    loss = 'binary_crossentropy', 
-    # 
-    optimizer = optimizer_adadelta(),
-    # 
-    metrics = c('accuracy')
-  )
+  layer_dense(units = 2, activation = 'softmax')
 
 models[[2]] <- keras_model_sequential() %>% 
   layer_dense(units = 5000, activation = 'relu', 
@@ -830,16 +846,7 @@ models[[2]] <- keras_model_sequential() %>%
   layer_dense(units = 50, activation = 'relu') %>%
   layer_dropout(rate = 0.05) %>%
   # softmax guarantees output between 0 and 1; pseudo probability 
-  layer_dense(units = 2, activation = 'softmax') %>% 
-  # 
-  compile(
-    # this is the metric used for the competition
-    loss = 'binary_crossentropy', 
-    # 
-    optimizer = optimizer_adadelta(),
-    # 
-    metrics = c('accuracy')
-  )
+  layer_dense(units = 2, activation = 'softmax')
 
 models[[3]] <- keras_model_sequential() %>% 
   layer_dense(units = 400, activation = 'relu', 
@@ -852,70 +859,18 @@ models[[3]] <- keras_model_sequential() %>%
   layer_dense(units = 50, activation = 'relu') %>%
   layer_dropout(rate = 0.05) %>%
   # softmax guarantees output between 0 and 1; pseudo probability 
-  layer_dense(units = 2, activation = 'softmax') %>% 
-  # 
-  compile(
-    # this is the metric used for the competition
-    loss = 'binary_crossentropy', 
-    # 
-    optimizer = optimizer_adadelta(),
-    # 
-    metrics = c('accuracy')
-  )
+  layer_dense(units = 2, activation = 'softmax')
 
 ```
 
 
-```{r}
-
-```
-
 
 ```{r}
 
-# models[[2]] <- keras_model_sequential() %>% 
-#   layer_dense(units = 1000, activation = 'relu', 
-#     input_shape = c(ncol(x_train[[2]]))) %>% 
-#   layer_dropout(rate = 0.5) %>%
-#   layer_dense(units = 500, activation = 'relu') %>%
-#   layer_dropout(rate = 0.4) %>%
-#   layer_dense(units = 250, activation = 'relu') %>%
-#   layer_dropout(rate = 0.3) %>%
-#   layer_dense(units = 100, activation = 'relu') %>%
-#   layer_dropout(rate = 0.2) %>%
-#   layer_dense(units = 50, activation = 'relu') %>%
-#   layer_dropout(rate = 0.1) %>%
-#   layer_dense(units = 10, activation = 'relu') %>%
-#   layer_dropout(rate = 0) %>%
-#   # softmax guarantees output between 0 and 1; pseudo probability 
-#   layer_dense(units = 2, activation = 'softmax') %>% 
-#   # 
-#   compile(
-#     # this is the metric used for the competition
-#     loss = 'binary_crossentropy', 
-#     # 
-#     optimizer = optimizer_adadelta(),
-#     # 
-#     metrics = c('accuracy')
-#   )
-# 
-# history <- models[[2]] %>% 
-#   fit(
-#     x = x_train[[2]], 
-#     y = y_train[[2]], 
-#     epochs = 10, #5,
-#     batch_size = 128, 
-#     validation_split = 0.2)
+i = 3
 
-```
-
-
-```{r}
-
-# i = 3
-# 
-# print(ncol(x_train[[i]]))
-# print(nrow(x_train[[i]]))
+print(ncol(x_train[[i]]))
+print(nrow(x_train[[i]]))
 # 
 # models[[i]] <- keras_model_sequential() %>% 
 #   layer_dense(units = 400, activation = 'relu', 
@@ -961,14 +916,20 @@ Other loss functions available here: https://keras.io/losses/
 
 history = list() 
 
-for (i in seq_along(models)) {
-
+# for (i in seq_along(models)) {
+for (i in 2) {
+  
   history[[i]] <- models[[i]] %>% 
+    compile(
+      loss = 'binary_crossentropy', 
+      optimizer = optimizer_adadelta(),
+      metrics = c('accuracy')
+    ) %>%
     fit(
       x = x_train[[i]], 
       y = y_train[[i]],
-      class_weight=class_weights[[i]],
-      epochs = 5, #5,
+      # class_weight=class_weights[[i]],
+      epochs = 3, #5,
       batch_size = 128, 
       validation_split = 0.2, 
       shuffle = TRUE) 
