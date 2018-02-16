@@ -243,9 +243,7 @@ lapply(
 
 only one is a balanced dataset
 
-# Modelling
-
-## preprocess data
+# Preprocess data
 
 ```{r}
 
@@ -254,6 +252,8 @@ model_train_hhold_data = raw_train_hhold_data
 ```
 
 create new df for preprocessed data
+
+## treat NULL observations
 
 ```{r}
 
@@ -311,6 +311,8 @@ lapply(
   )
 
 ```
+
+## correct data types
 
 Our target variable appears to be encoded as strings. Let's double check that. 
 
@@ -408,6 +410,7 @@ lapply(
 
 tons of character columns
 
+## standardize numeric
 
 ```{r}
 
@@ -448,6 +451,8 @@ model_train_hhold_data <- lapply(
 
 ```
 
+## OHE categorical
+
 one hot encode character columns
 
 ```{r}
@@ -457,6 +462,8 @@ head(model_train_hhold_data[[1]])
 ```
 
 looks right
+
+## split train validation
 
 ```{r}
 
@@ -500,6 +507,8 @@ test <- lapply(
 ```
 
 split into train and test samples
+
+# Modelling
 
 ## logistic regression
 
