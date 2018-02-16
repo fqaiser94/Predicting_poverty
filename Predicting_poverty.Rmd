@@ -92,6 +92,11 @@ define generic load data function
 
 ```{r}
 
+country = list()
+country[[1]] <- 'A'
+country[[2]] <- 'B'
+country[[3]] <- 'C'
+
 raw_train_hhold_data <- load_data(
   data_loc = data_loc, 
   file_pattern = '.*hhold.*train.*')
@@ -196,10 +201,10 @@ ggplot_missing <- function(x){
       y = "Rows")
 }
 
-lapply(
-  X = raw_train_hhold_data,
-  FUN = ggplot_missing
-  )
+# lapply(
+#   X = raw_train_hhold_data,
+#   FUN = ggplot_missing
+#   )
 
 ```
 
@@ -467,42 +472,27 @@ looks right
 
 ```{r}
 
-temp <- function(df, prcnt, return_train, return_test) {
-  
-  # this function will only work properly if seed has been set correctly
-  set.seed(123)
-  
-  # sample indices
-  sample_size <- floor(prcnt * nrow(df))
-  train_ind <- sample(seq_len(nrow(df)), size = sample_size)
+train_inds = list()
 
-  if(return_train==TRUE) {
-    train <- subset(x = df[train_ind, ], select = -c(id))
-    return(train)
-  }
+train = list()
+test = list()
+
+for (i in seq_along(model_train_hhold_data)) {
   
-  if(return_test==TRUE) {
-    test <- subset(x = df[-train_ind, ], select = -c(id))
-    return(test)
-  }
+  # sample indices for training data
+  sample_size <- floor(0.75 * nrow(model_train_hhold_data[[i]]))
   
+  # save to list, we'll need these later to get back the id column
+  train_inds[[i]] <- sample(
+    seq_len(nrow(model_train_hhold_data[[i]])), size = sample_size)
+  
+  train[[i]] <- subset(
+    x =model_train_hhold_data[[i]][train_inds[[i]], ], select = -c(id))
+  
+  test[[i]] <- subset(
+    model_train_hhold_data[[i]][-train_inds[[i]], ], select = -c(id))
+
 }
-
-train <- lapply(
-  X = model_train_hhold_data, 
-  FUN = temp, 
-  prcnt=0.75, 
-  return_train=TRUE, 
-  return_test=FALSE
-  )
-
-test <- lapply(
-  X = model_train_hhold_data, 
-  FUN = temp, 
-  prcnt=0.75, 
-  return_train=FALSE, 
-  return_test=TRUE
-  )
 
 ```
 
@@ -742,7 +732,7 @@ for (i in seq_along(models)) {
 
 ```
 
-### predictions
+### validation predictions
 
 ```{r}
 
@@ -750,24 +740,54 @@ test_predictions = list()
 
 for (i in seq_along(models)) {
 
-  predictions[[i]] <- models[[i]] %>%
+  test_predictions[[i]] <- models[[i]] %>%
     # make predictions
-    predict_proba(x=x_test) %>%
+    predict_proba(x=x_test[[i]]) %>%
     # convert to df
     data.frame() %>%
     rename(not_poor=X1, poor=X2) %>%
     # add back country
-    mutate(country='A') %>%
+    mutate(country=country[[i]]) %>%
     # add back id
     bind_cols(
-      raw_train_hhold_data[[i]][-train_ind, -raw_train_hhold_data[[i]]$id]) %>%
+      subset(model_train_hhold_data[[i]][-train_inds[[i]], ], select=c(id))) %>%
     # we only want the probability that p = 1 (not p = 0)
     select(id, country, poor)
   }
 
-head(predictions)
+head(test_predictions)
 
 ```
+
+### test predictions
+
+```{r}
+
+# need to transform test data in the same way as training data, bollocks
+
+test_predictions = list()
+
+for (i in seq_along(models)) {
+
+  test_predictions[[i]] <- models[[i]] %>%
+    # make predictions
+    predict_proba(x=raw_test_hhold_data[[i]]) %>%
+    # convert to df
+    data.frame() %>%
+    rename(not_poor=X1, poor=X2) %>%
+    # add back country
+    mutate(country=country[[i]]) %>%
+    # add back id
+    bind_cols(
+      subset(model_train_hhold_data[[i]][-train_inds[[i]], ], select=c(id))) %>%
+    # we only want the probability that p = 1 (not p = 0)
+    select(id, country, poor)
+  }
+
+head(test_predictions)
+
+```
+
 
 ### interpreting the model
 
