@@ -252,11 +252,41 @@ only one is a balanced dataset
 
 ```{r}
 
-model_train_hhold_data = raw_train_hhold_data
+# model_train_hhold_data = raw_train_hhold_data
 
 ```
 
 create new df for preprocessed data
+
+```{r}
+
+model_train_hhold_data = list()
+
+for (i in seq_along(raw_train_hhold_data)) {
+
+  model_train_hhold_data[[i]] <- raw_train_hhold_data[[i]] %>%
+    mutate(Train=1) %>%
+    bind_rows(
+      raw_test_hhold_data[[i]] %>% 
+        mutate(Train=0)) %>%
+    mutate(poor = ifelse(is.na(poor), 'False', poor))
+
+}
+
+```
+
+combined train and test data temporarily so we transform them in exactly the same way
+
+```{r}
+
+# lapply(
+#   X = model_train_hhold_data,
+#   FUN = ggplot_missing
+#   )
+
+```
+
+where the poor column is coming from the testing data, it is missing across all three datasets.  
 
 ## treat NULL observations
 
@@ -269,13 +299,6 @@ for (i in seq_along(model_train_hhold_data)) {
   #   model_train_hhold_data[[i]][complete.cases(, model_train_hhold_data[[i]])]
   
   # for dropping columns with NA
-  # inds <- (colSums(is.na(model_train_hhold_data[[i]]))) > 0 
-  # 
-  # print(sum(inds))
-  # print(inds)
-  # 
-  # model_train_hhold_data[[i]] <- model_train_hhold_data[[i]][, -inds]
-  
   model_train_hhold_data[[i]] <- 
     model_train_hhold_data[[i]][ , colSums(
       is.na(model_train_hhold_data[[i]]))==0]
@@ -302,6 +325,8 @@ lapply(
 
 remove any columns with NULL values
 
+## correct data types
+
 ```{r}
 
 temp_function <- function(df) {
@@ -316,8 +341,6 @@ lapply(
   )
 
 ```
-
-## correct data types
 
 Our target variable appears to be encoded as strings. Let's double check that. 
 
@@ -336,7 +359,7 @@ lapply(
 
 ```
 
-yup, character.  
+yup, character it is.   
 
 ```{r}
 
@@ -352,19 +375,6 @@ for (i in seq_along(model_train_hhold_data)) {
 ```
 
 changed to boolean
-
-```{r}
-
-# for (i in seq_along(model_train_hhold_data)) {
-#   
-#   print(which(model_train_hhold_data[[i]]=="True", arr.ind = TRUE))
-#   print(which(model_train_hhold_data[[i]]=="False", arr.ind = TRUE))
-# 
-# }
-
-```
-
-double checked and verified that there are no other columns where True/False is encoded as strings
 
 ```{r}
 
@@ -401,7 +411,7 @@ lapply(
 
 ```
 
-only 4 numeric (integer or double) columns (excluding id column)
+relatively few numeric (integer or double) features
 
 ```{r}
 
@@ -413,9 +423,31 @@ lapply(
 
 ```
 
-tons of character columns
+tons of character columns, relatively speaking.  
 
 ## standardize numeric
+
+```{r}
+
+temp = c('a', 2, 5, 'c')
+
+temp1 = c()
+
+for(element in temp) {
+  temp1 <- c(temp1, is.numeric(element))
+}
+
+temp1
+
+```
+
+
+```{r}
+
+which(colnames(model_train_hhold_data[[1]]) %in% c('id', 'Train'))
+
+```
+
 
 ```{r}
 
@@ -429,7 +461,8 @@ standardize <- function(df, omit_columns) {
   ind[which(colnames(df) %in% omit_columns)] <- FALSE
 
   # standardize columns
-  df[ind] = lapply(df[ind], scale)
+  df[, ind] = lapply(df[, ind], scale)
+  df[, ind] = lapply(df[, ind], as.vector)
   
   return(df)
 }
@@ -437,12 +470,25 @@ standardize <- function(df, omit_columns) {
 model_train_hhold_data <- lapply(
   X = model_train_hhold_data, 
   FUN = standardize, 
-  omit_columns = 'id'
+  omit_columns = c('id', 'Train')
   )
 
 ```
 
-standardize numeric columns (excluding the id column)
+
+```{r}
+
+lapply(
+  X = model_train_hhold_data, 
+  FUN = filter_by_column_type, 
+  type = is.numeric # integer or double (numeric)
+  )
+
+```
+
+standardize numeric columns (excluding the id and train columns)
+
+## OHE categorical
 
 ```{r}
 
@@ -456,8 +502,6 @@ model_train_hhold_data <- lapply(
 
 ```
 
-## OHE categorical
-
 one hot encode character columns
 
 ```{r}
@@ -466,16 +510,40 @@ head(model_train_hhold_data[[1]])
 
 ```
 
-looks right
+looks about right
 
-## split train validation
+## split train validation test
+
+
+```{r}
+
+test = list()
+
+for (i in seq_along(model_train_hhold_data)) {
+  
+  test[[i]] <- model_train_hhold_data[[i]] %>%
+    filter(Train==0) %>%
+    select(-Train
+           #, -poor
+           )
+  
+  model_train_hhold_data[[i]] <- model_train_hhold_data[[i]] %>%
+    filter(Train==1) %>%
+    select(-Train)
+
+}
+
+```
+
+
+extract testing data
 
 ```{r}
 
 train_inds = list()
 
 train = list()
-test = list()
+valid = list()
 
 for (i in seq_along(model_train_hhold_data)) {
   
@@ -489,14 +557,14 @@ for (i in seq_along(model_train_hhold_data)) {
   train[[i]] <- subset(
     x =model_train_hhold_data[[i]][train_inds[[i]], ], select = -c(id))
   
-  test[[i]] <- subset(
+  valid[[i]] <- subset(
     model_train_hhold_data[[i]][-train_inds[[i]], ], select = -c(id))
 
 }
 
 ```
 
-split into train and test samples
+split into train and valid samples
 
 # Modelling
 
@@ -560,6 +628,11 @@ x_train <- lapply(
   FUN = temp_function 
   )
 
+x_valid <- lapply(
+  X = valid, 
+  FUN = temp_function
+  )
+
 x_test <- lapply(
   X = test, 
   FUN = temp_function
@@ -582,8 +655,8 @@ y_train <- lapply(
   FUN = temp_function 
   )
 
-y_test <- lapply(
-  X = test,
+y_valid <- lapply(
+  X = valid,
   FUN = temp_function 
   )
 
@@ -641,7 +714,7 @@ for (i in seq_along(models)) {
     fit(
       x = x_train[[i]], 
       y = y_train[[i]], 
-      epochs = 5,  #30, 
+      epochs = 50, #5,
       batch_size = 128, 
       validation_split = 0.2)
 }
@@ -665,7 +738,7 @@ for (i in seq_along(models)) {
 for (i in seq_along(models)) {
   
   temp <- models[[i]] %>% 
-    evaluate(x_test[[i]], y_test[[i]])
+    evaluate(x_valid[[i]], y_valid[[i]])
   
   print(temp)
 }
@@ -736,26 +809,26 @@ for (i in seq_along(models)) {
 
 ```{r}
 
-test_predictions = list()
-
-for (i in seq_along(models)) {
-
-  test_predictions[[i]] <- models[[i]] %>%
-    # make predictions
-    predict_proba(x=x_test[[i]]) %>%
-    # convert to df
-    data.frame() %>%
-    rename(not_poor=X1, poor=X2) %>%
-    # add back country
-    mutate(country=country[[i]]) %>%
-    # add back id
-    bind_cols(
-      subset(model_train_hhold_data[[i]][-train_inds[[i]], ], select=c(id))) %>%
-    # we only want the probability that p = 1 (not p = 0)
-    select(id, country, poor)
-  }
-
-head(test_predictions)
+# test_predictions = list()
+# 
+# for (i in seq_along(models)) {
+# 
+#   test_predictions[[i]] <- models[[i]] %>%
+#     # make predictions
+#     predict_proba(x=x_test[[i]]) %>%
+#     # convert to df
+#     data.frame() %>%
+#     rename(not_poor=X1, poor=X2) %>%
+#     # add back country
+#     mutate(country=country[[i]]) %>%
+#     # add back id
+#     bind_cols(
+#       subset(model_train_hhold_data[[i]][-train_inds[[i]], ], select=c(id))) %>%
+#     # we only want the probability that p = 1 (not p = 0)
+#     select(id, country, poor)
+#   }
+# 
+# head(test_predictions)
 
 ```
 
@@ -763,7 +836,12 @@ head(test_predictions)
 
 ```{r}
 
-# need to transform test data in the same way as training data, bollocks
+colnames(x_test[[1]])
+
+```
+
+
+```{r}
 
 test_predictions = list()
 
@@ -771,15 +849,14 @@ for (i in seq_along(models)) {
 
   test_predictions[[i]] <- models[[i]] %>%
     # make predictions
-    predict_proba(x=raw_test_hhold_data[[i]]) %>%
+    predict_proba(x = x_test[[i]][, -1]) %>%
     # convert to df
     data.frame() %>%
     rename(not_poor=X1, poor=X2) %>%
     # add back country
     mutate(country=country[[i]]) %>%
     # add back id
-    bind_cols(
-      subset(model_train_hhold_data[[i]][-train_inds[[i]], ], select=c(id))) %>%
+    bind_cols(data.frame(id = x_test[[i]][, 1])) %>%
     # we only want the probability that p = 1 (not p = 0)
     select(id, country, poor)
   }
@@ -788,7 +865,17 @@ head(test_predictions)
 
 ```
 
+got predictions 
 
+```{r}
+
+temp = do.call("rbind", test_predictions)
+
+write.csv(x = temp, file = '/home/fqaiser94/Desktop/temp.csv', row.names = FALSE)
+
+```
+
+combine and save to csv
 ### interpreting the model
 
 useful resources:  
